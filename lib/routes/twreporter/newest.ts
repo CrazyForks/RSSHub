@@ -1,9 +1,9 @@
-import { Route } from '@/types';
-import cache from '@/utils/cache';
-import { load } from 'cheerio';
-import got from '@/utils/got';
+import pMap from 'p-map';
 
-import fetch from './fetch-article';
+import type { Route } from '@/types';
+import ofetch from '@/utils/ofetch';
+
+import { getArticleItem } from './fetch-article';
 
 export const route: Route = {
     path: '/newest',
@@ -30,26 +30,15 @@ export const route: Route = {
 };
 
 async function handler() {
-    const url = 'https://www.twreporter.org';
-    const res = await got(url);
-    const $ = load(res.data);
-    const list = $('.gKMjSz').get();
+    const base = 'https://www.twreporter.org';
+    const url = 'https://go-api.twreporter.org/v2/index_page';
+    const res = await ofetch(url);
+    const list = res.data.latest_section;
+    const out = await pMap(list, getArticleItem, { concurrency: 3 });
 
-    const out = await Promise.all(
-        list.map((item) => {
-            const $ = load(item);
-            const address = url + $('a').attr('href');
-            const title = $('.latest-section__Title-hzxpx3-6').text();
-            return cache.tryGet(address, async () => {
-                const single = await fetch(address);
-                single.title = title;
-                return single;
-            });
-        })
-    );
     return {
-        title: `報導者 | 最新`,
-        link: url,
+        title: '報導者 | 最新',
+        link: base,
         item: out,
     };
 }
